@@ -1,16 +1,14 @@
-from http import HTTPStatus
-
 import stripe
+from http import HTTPStatus
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import CreateView
-
 from common.views import TitleMixin
 from products.models import Basket
-
+from .models import Order
 from .forms import OrderForm
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -68,20 +66,14 @@ def stripe_webhook_view(request):
     # Handle the checkout.session.completed event
     if event['type'] == 'checkout.session.completed':
         # Retrieve the session. If you require line items in the response, you may include them by expanding line_items.
-        session = stripe.checkout.Session.retrieve(
-            event['data']['object']['id'],
-            expand=['line_items'],
-        )
-
-        line_items = session.line_items
-        # Fulfill the purchase...
-        fulfill_order(line_items)
+        session = event['data']['object']
+        fulfill_order(session)
 
     # Passed signature verification
     return HttpResponse(status=200)
 
 
-def fulfill_order(line_items):
-    # TODO: fill me in
-    order_id = int(line_items.metadata.order_id)
-    print("Fulfilling order")
+def fulfill_order(session):
+    order_id = int(session.metadata.order_id)
+    order = Order.objects.get(id=order_id)
+    order.update_after_paymant()
